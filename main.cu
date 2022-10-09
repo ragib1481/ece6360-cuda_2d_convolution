@@ -2,13 +2,12 @@
 #include <string>
 #include <fstream>
 #include <cmath>
-#include <vector>
+#include <thrust/host_vector.h>
 
 
 using namespace std;
 
-
-void getGaussianKernel(vector<float>& kernel, int sigma) {
+void getGaussianKernel(thrust::host_vector<float>& kernel, int sigma) {
     /* This function returns a vector containing a 1d gaussian kernel assuming 0 mean.
      * Since we are assuming the kernel is symmetric, this is a more
      * efficient approach instead of using a 2d gaussian kernel.
@@ -25,15 +24,15 @@ void getGaussianKernel(vector<float>& kernel, int sigma) {
 }
 
 
-void zeroPad(vector<float>& signal, int n) {
-    vector<float> zeros(n, 0);
+void zeroPad(thrust::host_vector<float>& signal, int n) {
+    thrust::host_vector<float> zeros(n, 0);
     signal.insert(signal.end(), zeros.begin(), zeros.end());
     zeros.insert(zeros.end(), signal.begin(), signal.end());
     signal = zeros;
 }
 
 
-void convolve1d(vector<float>& out, vector<float>& signal, vector<float>& kernel) {
+void convolve1d(thrust::host_vector<float>& out, thrust::host_vector<float>& signal, thrust::host_vector<float>& kernel) {
     float result = 0;
     int n = signal.size() + kernel.size() - 1;
 
@@ -61,9 +60,9 @@ int main(int argc, char* argv[]) {
     int sigma = atoi(argv[2]);
 
     //********************************** declare variables *********************************************
-    vector<float> kernel;
-    vector<float> signal;
-    vector<float> out;
+    thrust::host_vector<float> kernel;
+    thrust::host_vector<float> signal;
+    thrust::host_vector<float> out;
 
     //********************************** generate gaussian kernel **************************************
     getGaussianKernel(kernel, sigma);
