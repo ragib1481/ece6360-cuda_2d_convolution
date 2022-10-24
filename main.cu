@@ -109,7 +109,6 @@ int main(int argc, char* argv[]) {
 
     //********************************** save data *****************************************************
     Image output(out2, width, height);
-
     vector<char> bytes;
     output.toBytes(bytes);
     handler.saveImage(bytes, "./testData.tga", width, height);

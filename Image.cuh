@@ -22,8 +22,6 @@ public:
     Image(std::vector<pixel>& img, short width, short height);
     void toBytes(std::vector<char>& bytes);
     pixel* getPointer();
-    short getWidth() const;
-    short getHeight() const;
 };
 
 
