@@ -2,43 +2,63 @@
 // Created by ragib1481 on 10/5/22.
 //
 
+#include <sstream>
 #include "FileHandler.cuh"
 
-std::vector<std::vector<uint8>> FileHandler::loadImage(std::string fileName) {
-    std::vector<std::vector<uint8>> image;
-    return image;
+std::vector<char> FileHandler::loadImage(std::string filename, short& width, short& height) {
+    std::ifstream infile;
+    infile.open(filename, std::ios::binary | std::ios::out);        // open the file for binary writing
+    if (!infile.is_open()) {
+        std::cout << "ERROR: Unable to open file " << filename << std::endl;
+        return std::vector<char>();
+    }
+    infile.get(id_length);                            // id length (field 1)
+    infile.get(cmap_type);                            // color map type (field 2)
+    infile.get(image_type);                        // image_type (field 3)
+    infile.get(field_entry_a);
+    infile.get(field_entry_b);                        // color map field entry index (field 4)
+
+    infile.get(map_length_a);
+    infile.get(map_length_b);                        // color map field entry index (field 4)
+
+    infile.get(map_size);                            // color map entry size (field 4)
+
+    infile.get(origin_x_a);
+    infile.get(origin_x_b);                        // x origin (field 5)
+
+    infile.get(origin_y_a);
+    infile.get(origin_y_b);                        // x origin (field 5)
+
+    infile.read((char*)&width, 2);
+    infile.read((char*)&height, 2);
+
+    infile.get(pixel_depth);
+    infile.get(descriptor);
+
+    std::vector<char> bytes(width * height * 3);
+    infile.read(&bytes[0], width * height * 3);
+    infile.close();                    // close the file
+
+    return bytes;
 }
 
-void FileHandler::saveImage(std::vector<std::vector<uint8>>& image, std::string fileName) {
-    int height= image.size();
-    int width = image[0].size();
-    int k = 0;
-
-    char* bytes = new char[width * height * 3];
-
-    for (int i = 0; i < height; i++) {
-        for (int j = 0; j < width; j++) {
-            bytes[k++] = image[i][j];
-            bytes[k++] = 0;
-            bytes[k++] = 0;
-        }
-    }
+void FileHandler::saveImage(const std::vector<char>& bytes, std::string fileName, const short& width, const short& height) {
 
     std::ofstream outfile;
 
     outfile.open(fileName, std::ios::binary | std::ios::out);	// open a binary file
-    outfile.put(0);	// id length (field 1)
-    outfile.put(0);	// color map type (field 2)
-    outfile.put(2);	// image_type (field 3)
-    outfile.put(0); outfile.put(0);	// color map field entry index (field 4)
-    outfile.put(0); outfile.put(0);	// color map length (field 4)
-    outfile.put(0);	// color map entry size (field 4)
-    outfile.put(0); outfile.put(0);	// x origin (field 5)
-    outfile.put(0); outfile.put(0);	// y origin (field 5)
+    outfile.put(id_length);	// id length (field 1)
+    outfile.put(cmap_type);	// color map type (field 2)
+    outfile.put(image_type);	// image_type (field 3)
+    outfile.put(field_entry_a); outfile.put(field_entry_b);	// color map field entry index (field 4)
+    outfile.put(map_length_a); outfile.put(map_length_b);	// color map length (field 4)
+    outfile.put(map_size);	// color map entry size (field 4)
+    outfile.put(origin_x_a); outfile.put(origin_x_b);	// x origin (field 5)
+    outfile.put(origin_y_a); outfile.put(origin_y_b);	// y origin (field 5)
     outfile.write((char*)&width, 2);	// image width (field 5)
     outfile.write((char*)&height, 2);	// image height (field 5)
-    outfile.put(24);	// pixel depth (field 5)
-    outfile.put(0);	// image descriptor (field 5)
-    outfile.write(bytes, width * height * 3);	// write the image data
+    outfile.put(pixel_depth);	// pixel depth (field 5)
+    outfile.put(descriptor);	// image descriptor (field 5)
+    outfile.write(&bytes[0], width * height * 3);	// write the image data
     outfile.close();	// close the file
 }

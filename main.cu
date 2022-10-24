@@ -1,13 +1,15 @@
 #include <iostream>
 #include <string>
-#include <fstream>
 #include <cmath>
-#include <thrust/host_vector.h>
+#include <vector>
 
+#include "Image.cuh"
+#include "FileHandler.cuh"
 
 using namespace std;
 
-void getGaussianKernel(thrust::host_vector<float>& kernel, int sigma) {
+
+void getGaussianKernel(vector<float>& kernel, int sigma) {
     /* This function returns a vector containing a 1d gaussian kernel assuming 0 mean.
      * Since we are assuming the kernel is symmetric, this is a more
      * efficient approach instead of using a 2d gaussian kernel.
@@ -24,31 +26,52 @@ void getGaussianKernel(thrust::host_vector<float>& kernel, int sigma) {
 }
 
 
-void zeroPad(thrust::host_vector<float>& signal, int n) {
-    thrust::host_vector<float> zeros(n, 0);
-    signal.insert(signal.end(), zeros.begin(), zeros.end());
-    zeros.insert(zeros.end(), signal.begin(), signal.end());
-    signal = zeros;
+void convolveHeight(vector<pixel>& out, pixel* sig, float* kernel, short& width, short& height, int kernelSize) {
+    short newHeight = height - kernelSize + 1;
+    float resultR;
+    float resultG;
+    float resultB;
+
+    for (int i = 0; i < width; i++) {
+        for (int j = 0; j < newHeight; j++) {
+            resultR = 0.0f;
+            resultG = 0.0f;
+            resultB = 0.0f;
+            for (int k = 0; k < kernelSize; k++) {
+                resultR += sig[i + (j + k) * width].r * kernel[k];
+                resultG += sig[i + (j + k) * width].g * kernel[k];
+                resultB += sig[i + (j + k) * width].b * kernel[k];
+            }
+            out[i + j * width].r = resultR;
+            out[i + j * width].g = resultG;
+            out[i + j * width].b = resultB;
+        }
+    }
+    height = newHeight;
 }
 
+void convolveWidth(vector<pixel>& out, pixel* sig, const float* kernel, short& width, short& height, int kernelSize) {
+    short newWidth = width - kernelSize + 1;
+    float resultR;
+    float resultG;
+    float resultB;
 
-void convolve1d(thrust::host_vector<float>& out, thrust::host_vector<float>& signal, thrust::host_vector<float>& kernel) {
-    float result = 0;
-    int n = signal.size() + kernel.size() - 1;
-
-    /* Perform zero padding on the signal. The zero padding is performed assuming the kernel size is
-     * smaller than the signal size. */
-    zeroPad(signal, kernel.size()-1);
-
-    out.resize(n, 0);
-
-    for (int i = 0; i < out.size(); i++) {
-        result = 0;
-        for (int j = 0; j < kernel.size(); j++) {
-            result += signal[i + j] * kernel[j];
+    for (int i = 0; i < height; i++) {
+        for (int j = 0; j < newWidth; j++) {
+            resultR = 0.0f;
+            resultG = 0.0f;
+            resultB = 0.0f;
+            for (int k = 0; k < kernelSize; k++) {
+                resultR += sig[i * width + j + k].r * kernel[k];
+                resultG += sig[i * width + j + k].g * kernel[k];
+                resultB += sig[i * width + j + k].b * kernel[k];
+            }
+            out[i * newWidth + j].r = resultR;
+            out[i * newWidth + j].g = resultG;
+            out[i * newWidth + j].b = resultB;
         }
-        out[i] = result;
     }
+    width = newWidth;
 }
 
 
@@ -60,37 +83,35 @@ int main(int argc, char* argv[]) {
     int sigma = atoi(argv[2]);
 
     //********************************** declare variables *********************************************
-    thrust::host_vector<float> kernel;
-    thrust::host_vector<float> signal;
-    thrust::host_vector<float> out;
+    FileHandler handler;
+    short width;
+    short height;
 
     //********************************** generate gaussian kernel **************************************
+    vector<float> kernel;
     getGaussianKernel(kernel, sigma);
+    float* kernelPtr = &kernel[0];
 
     //********************************** load image ****************************************************
+    vector<char> imageRaw = handler.loadImage(filename, width, height);
+    cout << "width: " << width << " height: " << height << endl;
+    Image image(imageRaw, width, height);
+    pixel* imagePtr = image.getPointer();
 
     //********************************** perform convolution *******************************************
-    signal = kernel;
-    convolve1d(out, signal, kernel);
+    vector<pixel> out1;
+    out1.resize((width - kernel.size() + 1) * height);
+    convolveWidth(out1, imagePtr, kernelPtr, width, height, kernel.size());
+
+    vector<pixel> out2;
+    out2.resize(width * (height - kernel.size() + 1));
+    convolveHeight(out2, &out1[0], kernelPtr, width, height, kernel.size());
 
     //********************************** save data *****************************************************
-    std::ofstream myFile;
-    myFile.open("./kernel.csv");
-    myFile << "val" << endl;
-    for (auto x: kernel)
-        myFile << x << endl;
-    myFile.close();
+    Image output(out2, width, height);
 
-    myFile.open("./signal.csv");
-    myFile << "val" << endl;
-    for (auto x: signal)
-        myFile << x << endl;
-    myFile.close();
-
-    myFile.open("./out.csv");
-    myFile << "val" << endl;
-    for (auto x: out)
-        myFile << x << endl;
-    myFile.close();
+    vector<char> bytes;
+    output.toBytes(bytes);
+    handler.saveImage(bytes, "./testData.tga", width, height);
     return 0;
 }

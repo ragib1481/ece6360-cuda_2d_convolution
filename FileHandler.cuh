@@ -10,11 +10,22 @@
 #include <string>
 #include <fstream>
 
-typedef unsigned int uint8;
 class FileHandler {
+    char id_length;
+    char cmap_type;
+    char image_type;
+    char field_entry_a, field_entry_b;
+    char map_length_a, map_length_b;
+    char map_size;
+    char origin_x_a, origin_x_b;
+    char origin_y_a, origin_y_b;
+    char pixel_depth;
+    char descriptor;
+
 public:
-    static std::vector<std::vector<uint8>> loadImage(std::string fileName);
-    static void saveImage(std::vector<std::vector<uint8>>& image, std::string fileName);
+    std::vector<char> loadImage(std::string fileName, short& width, short& height);
+    void saveImage(const std::vector<char>& bytes, std::string fileName,
+                          const short& width, const short& height);
 };
 
 
