@@ -24,30 +24,22 @@ pixel* Image::getPointer() {
     return &image[0];
 }
 
-short Image::getWidth() const {
-    return width;
-}
-
-short Image::getHeight() const {
-    return height;
-}
-
 void Image::toBytes(std::vector<char>& bytes) {
     float max = 0;
     bytes.resize(image.size() * 3);
 
-    for (size_t i = 0; i < image.size(); i++){
-        if (image[i].b > max)
-            max = image[i].b;
-        if (image[i].g > max)
-            max = image[i].g;
-        if (image[i].r > max)
-            max = image[i].r;
-    }
+    //for (size_t i = 0; i < image.size(); i++){
+    //    if (image[i].b > max)
+    //        max = image[i].b;
+    //    if (image[i].g > max)
+    //        max = image[i].g;
+    //    if (image[i].r > max)
+    //        max = image[i].r;
+    //}
 
     for (size_t i = 0; i < image.size(); i++){
-        bytes[3 * i] = (char) (255 * image[i].b / max);
-        bytes[3 * i + 1] = (char) (255 * image[i].g / max);
-        bytes[3 * i + 2] = (char) (255 * image[i].r / max);
+        bytes[3 * i] = (char) (255 * image[i].b);
+        bytes[3 * i + 1] = (char) (255 * image[i].g);
+        bytes[3 * i + 2] = (char) (255 * image[i].r);
     }
 }

@@ -76,41 +76,48 @@ void convolveWidth(vector<pixel>& out, pixel* sig, const float* kernel, short& w
 
 
 int main(int argc, char* argv[]) {
-    //********************************** parse command line arguments **********************************
+    ////********************************** parse command line arguments **********************************
     if (argc != 3)
         return 1;
     string filename(argv[1]);
     int sigma = atoi(argv[2]);
 
-    //********************************** declare variables *********************************************
+    ////********************************** declare variables *********************************************
     FileHandler handler;
     short width;
     short height;
 
-    //********************************** generate gaussian kernel **************************************
+    ////********************************** generate gaussian kernel **************************************
     vector<float> kernel;
     getGaussianKernel(kernel, sigma);
     float* kernelPtr = &kernel[0];
 
-    //********************************** load image ****************************************************
+    ////********************************** load image ****************************************************
     vector<char> imageRaw = handler.loadImage(filename, width, height);
-    cout << "width: " << width << " height: " << height << endl;
+    const short widthInit = width;
+    const short heightInit = height;
     Image image(imageRaw, width, height);
     pixel* imagePtr = image.getPointer();
 
-    //********************************** perform convolution *******************************************
-    vector<pixel> out1;
-    out1.resize((width - kernel.size() + 1) * height);
-    convolveWidth(out1, imagePtr, kernelPtr, width, height, kernel.size());
+    ////********************************** perform convolution(CPU) **************************************
+    vector<pixel> out1Cpu;
+    out1Cpu.resize((width - kernel.size() + 1) * height);
+    convolveWidth(out1Cpu, imagePtr, kernelPtr, width, height, kernel.size());
 
-    vector<pixel> out2;
-    out2.resize(width * (height - kernel.size() + 1));
-    convolveHeight(out2, &out1[0], kernelPtr, width, height, kernel.size());
+    vector<pixel> out2Cpu;
+    out2Cpu.resize(width * (height - kernel.size() + 1));
+    convolveHeight(out2Cpu, &out1Cpu[0], kernelPtr, width, height, kernel.size());
 
-    //********************************** save data *****************************************************
-    Image output(out2, width, height);
+    ////********************************** perform convolution(GPU) **************************************
+    width = widthInit;
+    height = heightInit;
+    vector<pixel> out;
+    out.resize((width - kernel.size() + 1) * (height - kernel.size() + 1));
+
+    ////********************************** save data *****************************************************
+    Image output(out2Cpu, width, height);
     vector<char> bytes;
     output.toBytes(bytes);
-    handler.saveImage(bytes, "./testData.tga", width, height);
+    handler.saveImage(bytes, "./resultCpu.tga", width, height);
     return 0;
 }

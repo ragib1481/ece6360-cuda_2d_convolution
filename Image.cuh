@@ -6,6 +6,7 @@
 #define ASSIGNMENT2_IMAGE_CUH
 
 #include <vector>
+#include <iostream>
 
 struct pixel{
     float r;
