@@ -5,12 +5,12 @@
 #include <sstream>
 #include "FileHandler.cuh"
 
-std::vector<char> FileHandler::loadImage(std::string filename, short& width, short& height) {
+thrust::host_vector<char> FileHandler::loadImage(std::string filename, short& width, short& height) {
     std::ifstream infile;
     infile.open(filename, std::ios::binary | std::ios::out);        // open the file for binary writing
     if (!infile.is_open()) {
         std::cout << "ERROR: Unable to open file " << filename << std::endl;
-        return std::vector<char>();
+        return thrust::host_vector<char>();
     }
     infile.get(id_length);                            // id length (field 1)
     infile.get(cmap_type);                            // color map type (field 2)
@@ -35,14 +35,14 @@ std::vector<char> FileHandler::loadImage(std::string filename, short& width, sho
     infile.get(pixel_depth);
     infile.get(descriptor);
 
-    std::vector<char> bytes(width * height * 3);
+    thrust::host_vector<char> bytes(width * height * 3);
     infile.read(&bytes[0], width * height * 3);
     infile.close();                    // close the file
 
     return bytes;
 }
 
-void FileHandler::saveImage(const std::vector<char>& bytes, std::string fileName, const short& width, const short& height) {
+void FileHandler::saveImage(const thrust::host_vector<char>& bytes, std::string fileName, const short& width, const short& height) {
 
     std::ofstream outfile;
 

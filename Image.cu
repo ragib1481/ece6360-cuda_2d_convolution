@@ -4,7 +4,7 @@
 
 #include "Image.cuh"
 
-Image::Image(std::vector<char> &img, short width, short height) {
+Image::Image(thrust::host_vector<char> &img, short width, short height) {
 
     this->width = width;
     this->height = height;
@@ -16,7 +16,7 @@ Image::Image(std::vector<char> &img, short width, short height) {
     }
 }
 
-Image::Image(std::vector<pixel> &img, short width, short height) {
+Image::Image(thrust::host_vector<pixel> &img, short width, short height) {
     this->image = img;
 }
 
@@ -24,8 +24,7 @@ pixel* Image::getPointer() {
     return &image[0];
 }
 
-void Image::toBytes(std::vector<char>& bytes) {
-    float max = 0;
+void Image::toBytes(thrust::host_vector<char>& bytes) {
     bytes.resize(image.size() * 3);
 
     //for (size_t i = 0; i < image.size(); i++){

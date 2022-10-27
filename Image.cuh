@@ -7,6 +7,7 @@
 
 #include <vector>
 #include <iostream>
+#include <thrust/host_vector.h>
 
 struct pixel{
     float r;
@@ -17,11 +18,11 @@ struct pixel{
 class Image {
     short width;
     short height;
-    std::vector<pixel> image;
+    thrust::host_vector<pixel> image;
 public:
-    Image(std::vector<char>& img, short width, short height);
-    Image(std::vector<pixel>& img, short width, short height);
-    void toBytes(std::vector<char>& bytes);
+    Image(thrust::host_vector<char>& img, short width, short height);
+    Image(thrust::host_vector<pixel>& img, short width, short height);
+    void toBytes(thrust::host_vector<char>& bytes);
     pixel* getPointer();
 };
 

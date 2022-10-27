@@ -9,6 +9,7 @@
 #include <vector>
 #include <string>
 #include <fstream>
+#include <thrust/host_vector.h>
 
 class FileHandler {
     char id_length;
@@ -23,8 +24,8 @@ class FileHandler {
     char descriptor;
 
 public:
-    std::vector<char> loadImage(std::string fileName, short& width, short& height);
-    void saveImage(const std::vector<char>& bytes, std::string fileName,
+    thrust::host_vector<char> loadImage(std::string fileName, short& width, short& height);
+    void saveImage(const thrust::host_vector<char>& bytes, std::string fileName,
                           const short& width, const short& height);
 };
 

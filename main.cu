@@ -2,6 +2,7 @@
 #include <string>
 #include <cmath>
 #include <vector>
+#include <thrust/host_vector.h>
 
 #include "Image.cuh"
 #include "FileHandler.cuh"
@@ -9,7 +10,7 @@
 using namespace std;
 
 
-void getGaussianKernel(vector<float>& kernel, int sigma) {
+void getGaussianKernel(thrust::host_vector<float>& kernel, int sigma) {
     /* This function returns a vector containing a 1d gaussian kernel assuming 0 mean.
      * Since we are assuming the kernel is symmetric, this is a more
      * efficient approach instead of using a 2d gaussian kernel.
@@ -26,7 +27,7 @@ void getGaussianKernel(vector<float>& kernel, int sigma) {
 }
 
 
-void convolveHeight(vector<pixel>& out, pixel* sig, float* kernel, short& width, short& height, int kernelSize) {
+void convolveHeight(thrust::host_vector<pixel>& out, pixel* sig, float* kernel, short& width, short& height, int kernelSize) {
     short newHeight = height - kernelSize + 1;
     float resultR;
     float resultG;
@@ -50,7 +51,7 @@ void convolveHeight(vector<pixel>& out, pixel* sig, float* kernel, short& width,
     height = newHeight;
 }
 
-void convolveWidth(vector<pixel>& out, pixel* sig, const float* kernel, short& width, short& height, int kernelSize) {
+void convolveWidth(thrust::host_vector<pixel>& out, pixel* sig, const float* kernel, short& width, short& height, int kernelSize) {
     short newWidth = width - kernelSize + 1;
     float resultR;
     float resultG;
@@ -88,35 +89,35 @@ int main(int argc, char* argv[]) {
     short height;
 
     ////********************************** generate gaussian kernel **************************************
-    vector<float> kernel;
+    thrust::host_vector<float> kernel;
     getGaussianKernel(kernel, sigma);
     float* kernelPtr = &kernel[0];
 
     ////********************************** load image ****************************************************
-    vector<char> imageRaw = handler.loadImage(filename, width, height);
+    thrust::host_vector<char> imageRaw = handler.loadImage(filename, width, height);
     const short widthInit = width;
     const short heightInit = height;
     Image image(imageRaw, width, height);
     pixel* imagePtr = image.getPointer();
 
     ////********************************** perform convolution(CPU) **************************************
-    vector<pixel> out1Cpu;
+    thrust::host_vector<pixel> out1Cpu;
     out1Cpu.resize((width - kernel.size() + 1) * height);
     convolveWidth(out1Cpu, imagePtr, kernelPtr, width, height, kernel.size());
 
-    vector<pixel> out2Cpu;
+    thrust::host_vector<pixel> out2Cpu;
     out2Cpu.resize(width * (height - kernel.size() + 1));
     convolveHeight(out2Cpu, &out1Cpu[0], kernelPtr, width, height, kernel.size());
 
     ////********************************** perform convolution(GPU) **************************************
-    width = widthInit;
-    height = heightInit;
-    vector<pixel> out;
-    out.resize((width - kernel.size() + 1) * (height - kernel.size() + 1));
+    //width = widthInit;
+    //height = heightInit;
+    //vector<pixel> out;
+    //out.resize((width - kernel.size() + 1) * (height - kernel.size() + 1));
 
     ////********************************** save data *****************************************************
     Image output(out2Cpu, width, height);
-    vector<char> bytes;
+    thrust::host_vector<char> bytes;
     output.toBytes(bytes);
     handler.saveImage(bytes, "./resultCpu.tga", width, height);
     return 0;
