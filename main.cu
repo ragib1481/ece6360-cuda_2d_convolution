@@ -1,11 +1,12 @@
 #include <iostream>
 #include <string>
 #include <cmath>
-#include <vector>
 #include <thrust/host_vector.h>
+#include <thrust/device_vector.h>
 
 #include "Image.cuh"
 #include "FileHandler.cuh"
+
 
 using namespace std;
 
@@ -77,6 +78,36 @@ void convolveWidth(thrust::host_vector<pixel>& out, pixel* sig, const float* ker
 }
 
 
+////************************************** GPU implementations ********************************************
+__global__
+void convolveHeightKernel() {
+
+}
+
+__global__
+void convolveWidthKernel(pixel* out, pixel* sig, float* kernel, short width, short newWidth, short height, int kernelSize) {
+
+}
+
+thrust::host_vector<pixel> convolve2dGpu(pixel* sig, const float* kernel, short& width, short& height, int kernelSize){
+    short newWidth, newHeight;
+
+    ////********************************** perform convolution along the width ****************************
+    //// define device variables for convolution along the width
+    newWidth = width - kernelSize + 1;
+    thrust::device_vector<pixel> out1(newWidth * height);
+    pixel* out1Ptr = thrust::raw_pointer_cast(out1.data());
+
+    //// define kernel launch parameters for convolution along the width
+    cudaDeviceProp devProp;
+    cudaGetDeviceProperties(&devProp, 0);
+    cout << devProp.maxThreadsPerBlock << endl;
+    cout << devProp.maxGridSize[0] << ", " << devProp.maxGridSize[1] << ", " << devProp.maxGridSize[2] << endl;
+    cout << devProp.maxThreadsDim[0] << ", " << devProp.maxThreadsDim[1] << ", " << devProp.maxThreadsDim[2] << endl;
+    return thrust::host_vector<pixel>();
+}
+
+
 int main(int argc, char* argv[]) {
     ////********************************** parse command line arguments **********************************
     if (argc != 3)
@@ -101,25 +132,25 @@ int main(int argc, char* argv[]) {
     Image image(imageRaw, width, height);
     pixel* imagePtr = image.getPointer();
 
-    ////********************************** perform convolution(CPU) **************************************
-    thrust::host_vector<pixel> out1Cpu;
-    out1Cpu.resize((width - kernel.size() + 1) * height);
-    convolveWidth(out1Cpu, imagePtr, kernelPtr, width, height, kernel.size());
+    //////********************************** perform convolution(CPU) **************************************
+    //thrust::host_vector<pixel> out1Cpu;
+    //out1Cpu.resize((width - kernel.size() + 1) * height);
+    //convolveWidth(out1Cpu, imagePtr, kernelPtr, width, height, kernel.size());
 
-    thrust::host_vector<pixel> out2Cpu;
-    out2Cpu.resize(width * (height - kernel.size() + 1));
-    convolveHeight(out2Cpu, &out1Cpu[0], kernelPtr, width, height, kernel.size());
+    //thrust::host_vector<pixel> out2Cpu;
+    //out2Cpu.resize(width * (height - kernel.size() + 1));
+    //convolveHeight(out2Cpu, &out1Cpu[0], kernelPtr, width, height, kernel.size());
+
+    //////********************************** save data *****************************************************
+    //Image output(out2Cpu, width, height);
+    //thrust::host_vector<char> bytes;
+    //output.toBytes(bytes);
+    //handler.saveImage(bytes, "./resultCpu.tga", width, height);
 
     ////********************************** perform convolution(GPU) **************************************
-    //width = widthInit;
-    //height = heightInit;
-    //vector<pixel> out;
-    //out.resize((width - kernel.size() + 1) * (height - kernel.size() + 1));
+    width = widthInit;
+    height = heightInit;
+    thrust::host_vector<pixel> out = convolve2dGpu(imagePtr, kernelPtr, width, height, kernel.size()) ;
 
-    ////********************************** save data *****************************************************
-    Image output(out2Cpu, width, height);
-    thrust::host_vector<char> bytes;
-    output.toBytes(bytes);
-    handler.saveImage(bytes, "./resultCpu.tga", width, height);
     return 0;
 }
