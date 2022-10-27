@@ -51,6 +51,7 @@ void convolveHeight(thrust::host_vector<pixel>& out, pixel* sig, float* kernel, 
     height = newHeight;
 }
 
+
 void convolveWidth(thrust::host_vector<pixel>& out, pixel* sig, const float* kernel, short& width, short& height, int kernelSize) {
     short newWidth = width - kernelSize + 1;
     float resultR;
