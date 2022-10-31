@@ -42,3 +42,7 @@ void Image::toBytes(thrust::host_vector<char>& bytes) {
         bytes[3 * i + 2] = (char) (255 * image[i].r);
     }
 }
+
+thrust::host_vector<pixel> Image::getImage() {
+    return image;
+}

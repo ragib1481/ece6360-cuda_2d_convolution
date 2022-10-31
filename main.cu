@@ -11,6 +11,21 @@
 using namespace std;
 
 
+void checkCalcError(const thrust::host_vector<pixel> cpuOut, const thrust::host_vector<pixel> gpuOut) {
+    if (cpuOut.size() != gpuOut.size()) {
+        cout << "Size mismatch" << endl;
+        return;
+    }
+    float error = 0;
+    for (size_t i = 0; i < cpuOut.size(); i++) {
+        error += abs(cpuOut[i].r - gpuOut[i].r);
+        error += abs(cpuOut[i].g - gpuOut[i].g);
+        error += abs(cpuOut[i].b - gpuOut[i].b);
+    }
+    cout << "Total absolute error: " << error << endl;
+}
+
+
 void getGaussianKernel(thrust::host_vector<float>& kernel, int sigma) {
     /* This function returns a vector containing a 1d gaussian kernel assuming 0 mean.
      * Since we are assuming the kernel is symmetric, this is a more
@@ -28,7 +43,7 @@ void getGaussianKernel(thrust::host_vector<float>& kernel, int sigma) {
 }
 
 
-void convolveHeight(thrust::host_vector<pixel>& out, pixel* sig, float* kernel, short& width, short& height, int kernelSize) {
+void convolveHeight(thrust::host_vector<pixel>& out, const pixel* sig, float* kernel, short& width, short& height, int kernelSize) {
     short newHeight = height - kernelSize + 1;
     float resultR;
     float resultG;
@@ -53,7 +68,7 @@ void convolveHeight(thrust::host_vector<pixel>& out, pixel* sig, float* kernel, 
 }
 
 
-void convolveWidth(thrust::host_vector<pixel>& out, pixel* sig, const float* kernel, short& width, short& height, int kernelSize) {
+void convolveWidth(thrust::host_vector<pixel>& out, const pixel* sig, const float* kernel, short& width, short& height, int kernelSize) {
     short newWidth = width - kernelSize + 1;
     float resultR;
     float resultG;
@@ -85,26 +100,56 @@ void convolveHeightKernel() {
 }
 
 __global__
-void convolveWidthKernel(pixel* out, pixel* sig, float* kernel, short width, short newWidth, short height, int kernelSize) {
+void convolveWidthKernel(pixel* out, pixel* sig, float* kernel, const short width,
+                         const short newWidth, const short height, const int kernelSize) {
+    size_t ix = blockDim.x * blockIdx.x + threadIdx.x;
+    size_t iy = blockDim.y * blockIdx.y + threadIdx.y;
+    float r = 0;
+    float g = 0;
+    float b = 0;
 
+    if ((ix < newWidth) && (iy < height)) {
+
+        for (size_t k = 0; k < kernelSize; k++) {
+            r += sig[iy * width + ix + k].r * kernel[k];
+            g += sig[iy * width + ix + k].g * kernel[k];
+            b += sig[iy * width + ix + k].b * kernel[k];
+        }
+        out[iy * newWidth + ix].r = r;
+        out[iy * newWidth + ix].g = g;
+        out[iy * newWidth + ix].b = b;
+
+    }
 }
 
-thrust::host_vector<pixel> convolve2dGpu(pixel* sig, const float* kernel, short& width, short& height, int kernelSize){
+thrust::host_vector<pixel> convolve2dGpu(const thrust::host_vector<pixel> sig, const thrust::host_vector<float>kernel,
+                                         short& width, short& height, int kernelSize){
     short newWidth, newHeight;
 
     ////********************************** perform convolution along the width ****************************
     //// define device variables for convolution along the width
     newWidth = width - kernelSize + 1;
-    thrust::device_vector<pixel> out1(newWidth * height);
-    pixel* out1Ptr = thrust::raw_pointer_cast(out1.data());
+    thrust::device_vector<pixel> out1Gpu(newWidth * height);
+    pixel* out1Ptr = thrust::raw_pointer_cast(out1Gpu.data());
+
+    thrust::device_vector<pixel> in1 = sig;
+    pixel* in1Ptr = thrust::raw_pointer_cast(in1.data());
+
+    thrust::device_vector<float> convKernelGpu = kernel;
+    float* kernelPtr = thrust::raw_pointer_cast(convKernelGpu.data());
 
     //// define kernel launch parameters for convolution along the width
     cudaDeviceProp devProp;
     cudaGetDeviceProperties(&devProp, 0);
-    cout << devProp.maxThreadsPerBlock << endl;
-    cout << devProp.maxGridSize[0] << ", " << devProp.maxGridSize[1] << ", " << devProp.maxGridSize[2] << endl;
-    cout << devProp.maxThreadsDim[0] << ", " << devProp.maxThreadsDim[1] << ", " << devProp.maxThreadsDim[2] << endl;
-    return thrust::host_vector<pixel>();
+    dim3 threads(devProp.maxThreadsPerBlock/32, 32);
+    dim3 blocks(newWidth/threads.x + 1, height/threads.y + 1);
+
+    convolveWidthKernel<<<blocks, threads>>>(out1Ptr, in1Ptr, kernelPtr, width, newWidth, height, kernelSize);
+    cudaDeviceSynchronize();
+
+    thrust::host_vector<pixel> outHost = out1Gpu;
+
+    return outHost;
 }
 
 
@@ -133,9 +178,9 @@ int main(int argc, char* argv[]) {
     pixel* imagePtr = image.getPointer();
 
     //////********************************** perform convolution(CPU) **************************************
-    //thrust::host_vector<pixel> out1Cpu;
-    //out1Cpu.resize((width - kernel.size() + 1) * height);
-    //convolveWidth(out1Cpu, imagePtr, kernelPtr, width, height, kernel.size());
+    thrust::host_vector<pixel> out1Cpu;
+    out1Cpu.resize((width - kernel.size() + 1) * height);
+    convolveWidth(out1Cpu, imagePtr, kernelPtr, width, height, kernel.size());
 
     //thrust::host_vector<pixel> out2Cpu;
     //out2Cpu.resize(width * (height - kernel.size() + 1));
@@ -150,7 +195,8 @@ int main(int argc, char* argv[]) {
     ////********************************** perform convolution(GPU) **************************************
     width = widthInit;
     height = heightInit;
-    thrust::host_vector<pixel> out = convolve2dGpu(imagePtr, kernelPtr, width, height, kernel.size()) ;
+    thrust::host_vector<pixel> outGpu = convolve2dGpu(image.getImage(), kernel, width, height, kernel.size()) ;
+    checkCalcError(out1Cpu, outGpu);
 
     return 0;
 }

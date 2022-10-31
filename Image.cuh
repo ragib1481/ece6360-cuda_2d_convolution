@@ -24,6 +24,7 @@ public:
     Image(thrust::host_vector<pixel>& img, short width, short height);
     void toBytes(thrust::host_vector<char>& bytes);
     pixel* getPointer();
+    thrust::host_vector<pixel> getImage();
 };
 
 
