@@ -10,9 +10,9 @@ Image::Image(thrust::host_vector<char> &img, short width, short height) {
     this->height = height;
     image.resize(width * height);
     for (size_t i=0; i < width * height; i++) {
-        image[i].b = ((float)(unsigned char)img[3 * i])/255.0f;
-        image[i].g = ((float)(unsigned char)img[3 * i + 1])/255.0f;
-        image[i].r = ((float)(unsigned char)img[3 * i + 2])/255.0f;
+        image[i].b = ((double)(unsigned char)img[3 * i])/255.0f;
+        image[i].g = ((double)(unsigned char)img[3 * i + 1])/255.0f;
+        image[i].r = ((double)(unsigned char)img[3 * i + 2])/255.0f;
     }
 }
 

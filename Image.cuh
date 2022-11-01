@@ -10,9 +10,9 @@
 #include <thrust/host_vector.h>
 
 struct pixel{
-    float r;
-    float g;
-    float b;
+    double r;
+    double g;
+    double b;
 };
 
 class Image {
