@@ -39,7 +39,8 @@ void getGaussianKernel(thrust::host_vector<double>& kernel, int sigma) {
     kernel.resize(k);
     for (int i = 0; i < kernel.size(); i++) {
         x = (double) (i - k / 2);
-        kernel[i] = exp(-1 * x * x / (2 * sig * sig)) / sqrt(2 * sig * sig * M_PI);
+        kernel[i] = (double)(exp(-1.0 * x * x / (2.0 * sig * sig)) / sqrt(2.0 * sig * sig * M_PI));
+        //kernel[i] = 1.0/(double)k;
     }
 }
 
@@ -52,9 +53,9 @@ void convolveHeight(thrust::host_vector<pixel>& out, const pixel* sig, double* k
 
     for (int i = 0; i < width; i++) {
         for (int j = 0; j < newHeight; j++) {
-            resultR = 0.0f;
-            resultG = 0.0f;
-            resultB = 0.0f;
+            resultR = 0.0;
+            resultG = 0.0;
+            resultB = 0.0;
             for (int k = 0; k < kernelSize; k++) {
                 resultR += sig[i + (j + k) * width].r * kernel[k];
                 resultG += sig[i + (j + k) * width].g * kernel[k];
@@ -77,9 +78,9 @@ void convolveWidth(thrust::host_vector<pixel>& out, const pixel* sig, const doub
 
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < newWidth; j++) {
-            resultR = 0.0f;
-            resultG = 0.0f;
-            resultB = 0.0f;
+            resultR = 0.0;
+            resultG = 0.0;
+            resultB = 0.0;
             for (int k = 0; k < kernelSize; k++) {
                 resultR += sig[i * width + j + k].r * kernel[k];
                 resultG += sig[i * width + j + k].g * kernel[k];
@@ -96,8 +97,27 @@ void convolveWidth(thrust::host_vector<pixel>& out, const pixel* sig, const doub
 
 ////************************************** GPU implementations ********************************************
 __global__
-void convolveHeightKernel() {
+void convolveHeightKernel(pixel* out, pixel* sig, double* kernel, const short width,
+                          const short height, const short newHeight, const int kernelSize) {
+    size_t ix = blockDim.x * blockIdx.x + threadIdx.x;
+    size_t iy = blockDim.y * blockIdx.y + threadIdx.y;
+    double r = 0;
+    double g = 0;
+    double b = 0;
+    size_t idx;
 
+    if ((ix < width) && (iy < newHeight)) {
+        for (size_t k = 0; k < kernelSize; k++) {
+            idx = ix + (iy + k) * width;
+            r += sig[idx].r * kernel[k];
+            g += sig[idx].g * kernel[k];
+            b += sig[idx].b * kernel[k];
+        }
+        idx = ix + iy * width;
+        out[idx].r = r;
+        out[idx].g = g;
+        out[idx].b = b;
+    }
 }
 
 __global__
@@ -108,18 +128,20 @@ void convolveWidthKernel(pixel* out, pixel* sig, double* kernel, const short wid
     double r = 0;
     double g = 0;
     double b = 0;
+    size_t idx;
 
     if ((ix < newWidth) && (iy < height)) {
 
         for (size_t k = 0; k < kernelSize; k++) {
-            r += sig[iy * width + ix + k].r * kernel[k];
-            g += sig[iy * width + ix + k].g * kernel[k];
-            b += sig[iy * width + ix + k].b * kernel[k];
+            idx = iy * width + ix + k;
+            r += sig[idx].r * kernel[k];
+            g += sig[idx].g * kernel[k];
+            b += sig[idx].b * kernel[k];
         }
-        out[iy * newWidth + ix].r = r;
-        out[iy * newWidth + ix].g = g;
-        out[iy * newWidth + ix].b = b;
-
+        idx = iy * newWidth + ix;
+        out[idx].r = r;
+        out[idx].g = g;
+        out[idx].b = b;
     }
 }
 
@@ -147,8 +169,19 @@ thrust::host_vector<pixel> convolve2dGpu(const thrust::host_vector<pixel> sig, c
 
     convolveWidthKernel<<<blocks, threads>>>(out1Ptr, in1Ptr, kernelPtr, width, newWidth, height, kernelSize);
     cudaDeviceSynchronize();
+    width = newWidth;
 
-    thrust::host_vector<pixel> outHost = out1Gpu;
+    ////********************************** perform convolution along the height ***************************
+    newHeight = height - kernelSize + 1;
+    blocks.y = newHeight/threads.y + 1;
+
+    thrust::device_vector<pixel> out2Gpu(newWidth * newHeight);
+    pixel* out2Ptr = thrust::raw_pointer_cast(out2Gpu.data());
+    convolveHeightKernel<<<blocks, threads>>>(out2Ptr, out1Ptr, kernelPtr, width, height, newHeight, kernelSize);
+    cudaDeviceSynchronize();
+    height = newHeight;
+
+    thrust::host_vector<pixel> outHost = out2Gpu;
 
     return outHost;
 }
@@ -184,26 +217,38 @@ int main(int argc, char* argv[]) {
     out1Cpu.resize((width - kernel.size() + 1) * height);
     convolveWidth(out1Cpu, imagePtr, kernelPtr, width, height, kernel.size());
 
-    //thrust::host_vector<pixel> out2Cpu;
-    //out2Cpu.resize(width * (height - kernel.size() + 1));
-    //convolveHeight(out2Cpu, &out1Cpu[0], kernelPtr, width, height, kernel.size());
+    thrust::host_vector<pixel> out2Cpu;
+    out2Cpu.resize(width * (height - kernel.size() + 1));
+    convolveHeight(out2Cpu, &out1Cpu[0], kernelPtr, width, height, kernel.size());
     auto end = timer::now();
 
     // report computation time
     std::chrono::milliseconds t = std::chrono::duration_cast<std::chrono::milliseconds> (end - start);
     cout << "CPU Elapsed time: " << t.count() << "ms" << endl;
 
-    //////********************************** save data *****************************************************
-    //Image output(out2Cpu, width, height);
-    //thrust::host_vector<char> bytes;
-    //output.toBytes(bytes);
-    //handler.saveImage(bytes, "./resultCpu.tga", width, height);
+    //////********************************** save data (CPU) *********************************************
+    Image output(out2Cpu, width, height);
+    thrust::host_vector<char> bytes;
+    output.toBytes(bytes);
+    handler.saveImage(bytes, "./resultCpu.tga", width, height);
 
     ////********************************** perform convolution(GPU) **************************************
     width = widthInit;
     height = heightInit;
+    start = timer::now();
     thrust::host_vector<pixel> outGpu = convolve2dGpu(image.getImage(), kernel, width, height, kernel.size()) ;
-    checkCalcError(out1Cpu, outGpu);
+    end = timer::now();
+
+    t = std::chrono::duration_cast<std::chrono::milliseconds> (end - start);
+    cout << "GPU Elapsed time: " << t.count() << "ms" << endl;
+
+    //////********************************** save data (GPU) *********************************************
+    Image outputGpu(outGpu, width, height);
+    thrust::host_vector<char> bytesGpu;
+    output.toBytes(bytesGpu);
+    handler.saveImage(bytesGpu, "./resultGpu.tga", width, height);
+
+    checkCalcError(out2Cpu, outGpu);
 
     return 0;
 }
