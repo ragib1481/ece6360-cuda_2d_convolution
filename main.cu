@@ -96,8 +96,10 @@ void convolveWidth(thrust::host_vector<pixel>& out, const pixel* sig, const doub
 
 
 ////************************************** GPU implementations ********************************************
+__constant__ double kernelGpu[65536/sizeof(double)];
+
 __global__
-void convolveHeightKernel(pixel* out, const pixel* sig, const double* kernel, const short width,
+void convolveHeightKernel(pixel* out, const pixel* sig, const short width,
                           const short height, const short newHeight, const int kernelSize) {
     size_t ix = blockDim.x * blockIdx.x + threadIdx.x;
     size_t iy = blockDim.y * blockIdx.y + threadIdx.y;
@@ -109,9 +111,9 @@ void convolveHeightKernel(pixel* out, const pixel* sig, const double* kernel, co
     if ((ix < width) && (iy < newHeight)) {
         for (int k = 0; k < kernelSize; k++) {
             idx = ix + (iy + k) * width;
-            r += sig[idx].r * kernel[k];
-            g += sig[idx].g * kernel[k];
-            b += sig[idx].b * kernel[k];
+            r += sig[idx].r * kernelGpu[k];
+            g += sig[idx].g * kernelGpu[k];
+            b += sig[idx].b * kernelGpu[k];
         }
         idx = ix + iy * width;
         out[idx].r = r;
@@ -121,7 +123,7 @@ void convolveHeightKernel(pixel* out, const pixel* sig, const double* kernel, co
 }
 
 __global__
-void convolveWidthKernel(pixel* out, const pixel* sig, const double* kernel, const short width,
+void convolveWidthKernel(pixel* out, const pixel* sig, const short width,
                          const short newWidth, const short height, const int kernelSize) {
     size_t ix = blockDim.x * blockIdx.x + threadIdx.x;
     size_t iy = blockDim.y * blockIdx.y + threadIdx.y;
@@ -134,9 +136,9 @@ void convolveWidthKernel(pixel* out, const pixel* sig, const double* kernel, con
 
         for (int k = 0; k < kernelSize; k++) {
             idx = iy * width + ix + k;
-            r += sig[idx].r * kernel[k];
-            g += sig[idx].g * kernel[k];
-            b += sig[idx].b * kernel[k];
+            r += sig[idx].r * kernelGpu[k];
+            g += sig[idx].g * kernelGpu[k];
+            b += sig[idx].b * kernelGpu[k];
         }
         idx = iy * newWidth + ix;
         out[idx].r = r;
@@ -158,8 +160,9 @@ thrust::host_vector<pixel> convolve2dGpu(const thrust::host_vector<pixel> sig, c
     thrust::device_vector<pixel> in1 = sig;
     pixel* in1Ptr = thrust::raw_pointer_cast(in1.data());
 
-    thrust::device_vector<double> convKernelGpu = kernel;
-    double* kernelPtr = thrust::raw_pointer_cast(convKernelGpu.data());
+    // copy convolution kernel to constant memory
+    const double* kernelPtr = &kernel[0];
+    cudaMemcpyToSymbol(kernelGpu, kernelPtr, kernelSize * sizeof(double));
 
     //// define kernel launch parameters for convolution along the width
     cudaDeviceProp devProp;
@@ -167,7 +170,7 @@ thrust::host_vector<pixel> convolve2dGpu(const thrust::host_vector<pixel> sig, c
     dim3 threads(devProp.maxThreadsPerBlock/32, 32);
     dim3 blocks(newWidth/threads.x + 1, height/threads.y + 1);
 
-    convolveWidthKernel<<<blocks, threads>>>(out1Ptr, in1Ptr, kernelPtr, width, newWidth, height, kernelSize);
+    convolveWidthKernel<<<blocks, threads>>>(out1Ptr, in1Ptr, width, newWidth, height, kernelSize);
     cudaDeviceSynchronize();
     width = newWidth;
 
@@ -177,7 +180,7 @@ thrust::host_vector<pixel> convolve2dGpu(const thrust::host_vector<pixel> sig, c
 
     thrust::device_vector<pixel> out2Gpu(newWidth * newHeight);
     pixel* out2Ptr = thrust::raw_pointer_cast(out2Gpu.data());
-    convolveHeightKernel<<<blocks, threads>>>(out2Ptr, out1Ptr, kernelPtr, width, height, newHeight, kernelSize);
+    convolveHeightKernel<<<blocks, threads>>>(out2Ptr, out1Ptr, width, height, newHeight, kernelSize);
     cudaDeviceSynchronize();
     height = newHeight;
 
