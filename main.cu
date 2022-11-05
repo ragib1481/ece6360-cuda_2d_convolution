@@ -17,7 +17,7 @@ void checkCalcError(const thrust::host_vector<pixel> cpuOut, const thrust::host_
         cout << "Size mismatch" << endl;
         return;
     }
-    double error = 0;
+    double error = 0.0;
     for (size_t i = 0; i < cpuOut.size(); i++) {
         error += abs(cpuOut[i].r - gpuOut[i].r);
         error += abs(cpuOut[i].g - gpuOut[i].g);
@@ -101,13 +101,13 @@ void convolveHeightKernel(pixel* out, const pixel* sig, const double* kernel, co
                           const short height, const short newHeight, const int kernelSize) {
     size_t ix = blockDim.x * blockIdx.x + threadIdx.x;
     size_t iy = blockDim.y * blockIdx.y + threadIdx.y;
-    double r = 0;
-    double g = 0;
-    double b = 0;
+    double r = 0.0;
+    double g = 0.0;
+    double b = 0.0;
     size_t idx;
 
     if ((ix < width) && (iy < newHeight)) {
-        for (size_t k = 0; k < kernelSize; k++) {
+        for (int k = 0; k < kernelSize; k++) {
             idx = ix + (iy + k) * width;
             r += sig[idx].r * kernel[k];
             g += sig[idx].g * kernel[k];
@@ -125,14 +125,14 @@ void convolveWidthKernel(pixel* out, const pixel* sig, const double* kernel, con
                          const short newWidth, const short height, const int kernelSize) {
     size_t ix = blockDim.x * blockIdx.x + threadIdx.x;
     size_t iy = blockDim.y * blockIdx.y + threadIdx.y;
-    double r = 0;
-    double g = 0;
-    double b = 0;
+    double r = 0.0;
+    double g = 0.0;
+    double b = 0.0;
     size_t idx;
 
     if ((ix < newWidth) && (iy < height)) {
 
-        for (size_t k = 0; k < kernelSize; k++) {
+        for (int k = 0; k < kernelSize; k++) {
             idx = iy * width + ix + k;
             r += sig[idx].r * kernel[k];
             g += sig[idx].g * kernel[k];
