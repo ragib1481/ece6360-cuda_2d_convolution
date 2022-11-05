@@ -97,7 +97,7 @@ void convolveWidth(thrust::host_vector<pixel>& out, const pixel* sig, const doub
 
 ////************************************** GPU implementations ********************************************
 __global__
-void convolveHeightKernel(pixel* out, pixel* sig, double* kernel, const short width,
+void convolveHeightKernel(pixel* out, const pixel* sig, const double* kernel, const short width,
                           const short height, const short newHeight, const int kernelSize) {
     size_t ix = blockDim.x * blockIdx.x + threadIdx.x;
     size_t iy = blockDim.y * blockIdx.y + threadIdx.y;
@@ -121,7 +121,7 @@ void convolveHeightKernel(pixel* out, pixel* sig, double* kernel, const short wi
 }
 
 __global__
-void convolveWidthKernel(pixel* out, pixel* sig, double* kernel, const short width,
+void convolveWidthKernel(pixel* out, const pixel* sig, const double* kernel, const short width,
                          const short newWidth, const short height, const int kernelSize) {
     size_t ix = blockDim.x * blockIdx.x + threadIdx.x;
     size_t iy = blockDim.y * blockIdx.y + threadIdx.y;
