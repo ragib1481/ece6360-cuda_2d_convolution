@@ -10,9 +10,9 @@
 #include <thrust/host_vector.h>
 
 struct pixel{
-    double r;
-    double g;
-    double b;
+    float r = 0.0;
+    float g = 0.0;
+    float b = 0.0;
 };
 
 class Image {
@@ -22,7 +22,7 @@ class Image {
 public:
     Image(thrust::host_vector<char>& img, short width, short height);
     Image(thrust::host_vector<pixel>& img, short width, short height);
-    void toBytes(thrust::host_vector<char>& bytes);
+    void toBytes(thrust::host_vector<char>& bytes, bool scale=false);
     pixel* getPointer();
     thrust::host_vector<pixel> getImage();
 };

@@ -12,44 +12,51 @@
 using namespace std;
 typedef std::chrono::high_resolution_clock timer;
 
-void checkCalcError(const thrust::host_vector<pixel> cpuOut, const thrust::host_vector<pixel> gpuOut) {
+thrust::host_vector<pixel> checkCalcError(const thrust::host_vector<pixel> cpuOut, const thrust::host_vector<pixel> gpuOut) {
     if (cpuOut.size() != gpuOut.size()) {
         cout << "Size mismatch" << endl;
-        return;
+        return thrust::host_vector<pixel>();
     }
-    double error = 0.0;
+    thrust::host_vector<pixel> errors(cpuOut.size());
+    float error = 0.0;
     for (size_t i = 0; i < cpuOut.size(); i++) {
+        errors[i].r = abs(cpuOut[i].r - gpuOut[i].r);
+        errors[i].g = abs(cpuOut[i].g - gpuOut[i].g);
+        errors[i].b = abs(cpuOut[i].b - gpuOut[i].b);
+        //error += (errors[i].r + errors[i].g + errors[i].b);
         error += abs(cpuOut[i].r - gpuOut[i].r);
         error += abs(cpuOut[i].g - gpuOut[i].g);
         error += abs(cpuOut[i].b - gpuOut[i].b);
     }
     cout << "Total absolute error: " << error << endl;
+
+    return errors;
 }
 
 
-void getGaussianFilter(thrust::host_vector<double>& kernel, int sigma) {
-    /* This function returns a vector containing a 1d gaussian kernel assuming 0 mean.
-     * Since we are assuming the kernel is symmetric, this is a more
-     * efficient approach instead of using a 2d gaussian kernel.
+void getGaussianFilter(thrust::host_vector<float>& filter, int sigma) {
+    /* This function returns a vector containing a 1d gaussian filter assuming 0 mean.
+     * Since we are assuming the filter is symmetric, this is a more
+     * efficient approach instead of using a 2d gaussian filter.
      */
     int k = 6 * sigma + 1;
-    double sig = (double) sigma;
-    double x;
+    float sig = (float) sigma;
+    float x;
 
-    kernel.resize(k);
-    for (int i = 0; i < kernel.size(); i++) {
-        x = (double) (i - k / 2);
-        kernel[i] = (double)(exp(-1.0 * x * x / (2.0 * sig * sig)) / sqrt(2.0 * sig * sig * M_PI));
-        //kernel[i] = 1.0/(double)k;
+    filter.resize(k);
+    for (int i = 0; i < filter.size(); i++) {
+        x = (float) (i - k / 2);
+        filter[i] = (float)(exp(-1.0 * x * x / (2.0 * sig * sig)) / sqrt(2.0 * sig * sig * M_PI));
+        //filter[i] = 1.0 / (float)(256);
     }
 }
 
 
-void convolveHeight(thrust::host_vector<pixel>& out, const pixel* sig, const double* filter, short& width, short& height, int filterSize) {
+void convolveHeight(thrust::host_vector<pixel>& out, const pixel* sig, const float* filter, short& width, short& height, int filterSize) {
     short newHeight = height - filterSize + 1;
-    double resultR;
-    double resultG;
-    double resultB;
+    float resultR;
+    float resultG;
+    float resultB;
 
     for (int i = 0; i < width; i++) {
         for (int j = 0; j < newHeight; j++) {
@@ -70,11 +77,11 @@ void convolveHeight(thrust::host_vector<pixel>& out, const pixel* sig, const dou
 }
 
 
-void convolveWidth(thrust::host_vector<pixel>& out, const pixel* sig, const double* filter, short& width, short& height, int filterSize) {
+void convolveWidth(thrust::host_vector<pixel>& out, const pixel* sig, const float* filter, short& width, short& height, int filterSize) {
     short newWidth = width - filterSize + 1;
-    double resultR;
-    double resultG;
-    double resultB;
+    float resultR;
+    float resultG;
+    float resultB;
 
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < newWidth; j++) {
@@ -97,29 +104,29 @@ void convolveWidth(thrust::host_vector<pixel>& out, const pixel* sig, const doub
 
 ////************************************** GPU implementations ********************************************
 __global__
-void convolveHeightKernel(pixel* out, const pixel* sig, const double* filter, const short width,
+void convolveHeightKernel(pixel* out, const pixel* sig, const float* filter, const short width,
                           const short height, const short newHeight, const int filterSize) {
     extern __shared__ unsigned char sharedPtr[];                                // pointer to the shared memory
-    double* filterShared = (double*)sharedPtr;                                  // ptr to kernel shared memory
+    float* filterShared = (float*)sharedPtr;                                  // ptr to kernel shared memory
     size_t ix = blockDim.x * blockIdx.x + threadIdx.x;
     size_t iy = blockDim.y * blockIdx.y + threadIdx.y;
-    double r = 0.0;
-    double g = 0.0;
-    double b = 0.0;
+    float r = 0.0;
+    float g = 0.0;
+    float b = 0.0;
     size_t idx;
 
     if ((ix < width) && (iy < newHeight)) {
 
         // copy filter to the shared memory
-        for (int i = threadIdx.x; i < filterSize; i += blockDim.x)
-            filterShared[i] = filter[i];
-        __syncthreads();
+        //for (int i = (threadIdx.y * blockDim.x + threadIdx.x); i < filterSize; i += blockDim.x * blockDim.y)
+        //    filterShared[i] = filter[i];
+        //__syncthreads();
 
         for (int k = 0; k < filterSize; k++) {
             idx = ix + (iy + k) * width;
-            r += sig[idx].r * filterShared[k];
-            g += sig[idx].g * filterShared[k];
-            b += sig[idx].b * filterShared[k];
+            r += sig[idx].r * filter[k];
+            g += sig[idx].g * filter[k];
+            b += sig[idx].b * filter[k];
         }
         idx = ix + iy * width;
         out[idx].r = r;
@@ -129,34 +136,32 @@ void convolveHeightKernel(pixel* out, const pixel* sig, const double* filter, co
 }
 
 __global__
-void convolveWidthKernel(pixel* out, const pixel* sig, const double* filter, const short width,
+void convolveWidthKernel(pixel* out, const pixel* sig, const float* filter, const short width,
                          const short newWidth, const short height, const int filterSize) {
     extern __shared__ unsigned char sharedPtr[];                                // pointer to the shared memory
-    double* filterShared = (double*)sharedPtr;                                  // ptr to kernel shared memory
-    pixel* signalShared = (pixel*)&sharedPtr[filterSize * sizeof(double)];      // ptr to signal shared memory
+    float* filterShared = (float*)sharedPtr;                                  // ptr to kernel shared memory
     size_t ix = blockDim.x * blockIdx.x + threadIdx.x;                          // calculate index along x dimension
     size_t iy = blockDim.y * blockIdx.y + threadIdx.y;                          // calculate index along y dimension
     size_t idx;                                                                 // temporary variable to hold index
-    const int numElemenentToCpy = blockDim.x + filterSize - 1;                  // number of elements needed for each block
 
-    double r = 0.0;
-    double g = 0.0;
-    double b = 0.0;
+    float r = 0.0;
+    float g = 0.0;
+    float b = 0.0;
 
     // check if the indices are out scope
     if ((ix < newWidth) && (iy < height)) {
 
         // copy filter to the shared memory
-        for (int i = threadIdx.x; i < filterSize; i += blockDim.x)
-            filterShared[i] = filter[i];
-        __syncthreads();
+        //for (int i = threadIdx.x; i < filterSize; i += blockDim.x)
+        //    filterShared[i] = filter[i];
+        //__syncthreads();
 
         // perform convolution
         for (int k = 0; k < filterSize; k++) {
             idx = iy * width + ix + k;
-            r += sig[idx].r * filterShared[k];
-            g += sig[idx].g * filterShared[k];
-            b += sig[idx].b * filterShared[k];
+            r += sig[idx].r * filter[k];
+            g += sig[idx].g * filter[k];
+            b += sig[idx].b * filter[k];
         }
 
         // put data into the output
@@ -167,8 +172,8 @@ void convolveWidthKernel(pixel* out, const pixel* sig, const double* filter, con
     }
 }
 
-thrust::host_vector<pixel> convolve2dGpu(const thrust::host_vector<pixel> sig, const thrust::host_vector<double>filter,
-                                         short& width, short& height, int filterSize){
+thrust::host_vector<pixel> convolve2dGpu(const thrust::host_vector<pixel> sig, const thrust::host_vector<float>filter,
+                                         short& width, short& height, const int filterSize, FileHandler& handler){
     short newWidth, newHeight;
 
     ////********************************** perform convolution along the width ****************************
@@ -180,31 +185,31 @@ thrust::host_vector<pixel> convolve2dGpu(const thrust::host_vector<pixel> sig, c
     thrust::device_vector<pixel> in1 = sig;
     pixel* in1Ptr = thrust::raw_pointer_cast(in1.data());
 
-    thrust::device_vector<double> convKernelGpu = filter;
-    double* filterPtr = thrust::raw_pointer_cast(convKernelGpu.data());
+    thrust::device_vector<float> convFilterGpu = filter;
+    float* filterPtr = thrust::raw_pointer_cast(convFilterGpu.data());
 
     //// define filter launch parameters for convolution along the width
     cudaDeviceProp devProp;
     cudaGetDeviceProperties(&devProp, 0);
-    dim3 threads(devProp.maxThreadsPerBlock/32, 32);
-    dim3 blocks(newWidth/threads.x + 1, height/threads.y + 1);
+    dim3 blockDimension(32, 16, 1);
+    dim3 gridDimension((newWidth + blockDimension.x - 1) / blockDimension.x,
+                       (height + blockDimension.y - 1) / blockDimension.y, 1);
 
     // shared memory size
-    size_t sharedBytes = filterSize * sizeof(double) + (filterSize + threads.x - 1) * sizeof(pixel);
+    size_t sharedBytes = filterSize * sizeof(float);
 
-    convolveWidthKernel<<<blocks, threads, sharedBytes>>>
+    convolveWidthKernel<<<gridDimension, blockDimension, sharedBytes>>>
                             (out1Ptr, in1Ptr, filterPtr, width, newWidth, height, filterSize);
     cudaDeviceSynchronize();
     width = newWidth;
 
     ////********************************** perform convolution along the height ***************************
     newHeight = height - filterSize + 1;
-    blocks.y = newHeight/threads.y + 1;
+    gridDimension.y = (newHeight + blockDimension.y - 1) / blockDimension.y;
 
     thrust::device_vector<pixel> out2Gpu(newWidth * newHeight);
     pixel* out2Ptr = thrust::raw_pointer_cast(out2Gpu.data());
-    sharedBytes = filterSize * sizeof(double);
-    convolveHeightKernel<<<blocks, threads, sharedBytes>>>
+    convolveHeightKernel<<<gridDimension, blockDimension, sharedBytes>>>
                             (out2Ptr, out1Ptr, filterPtr, width, height, newHeight, filterSize);
     cudaDeviceSynchronize();
     height = newHeight;
@@ -228,9 +233,9 @@ int main(int argc, char* argv[]) {
     short height;
 
     ////********************************** generate gaussian filter **************************************
-    thrust::host_vector<double> filter;
+    thrust::host_vector<float> filter;
     getGaussianFilter(filter, sigma);
-    double* kernelPtr = &filter[0];
+    float* kernelPtr = &filter[0];
 
     ////********************************** load image ****************************************************
     thrust::host_vector<char> imageRaw = handler.loadImage(filename, width, height);
@@ -255,16 +260,16 @@ int main(int argc, char* argv[]) {
     cout << "CPU Elapsed time: " << t.count() << "ms" << endl;
 
     //////********************************** save data (CPU) *********************************************
-    Image output(out2Cpu, width, height);
-    thrust::host_vector<char> bytes;
-    output.toBytes(bytes);
-    handler.saveImage(bytes, "./resultCpu.tga", width, height);
+    Image outputCpu(out2Cpu, width, height);
+    thrust::host_vector<char> bytesCpu;
+    outputCpu.toBytes(bytesCpu, true);
+    handler.saveImage(bytesCpu, "./resultCpu.tga", width, height);
 
     ////********************************** perform convolution(GPU) **************************************
     width = widthInit;
     height = heightInit;
     start = timer::now();
-    thrust::host_vector<pixel> outGpu = convolve2dGpu(image.getImage(), filter, width, height, filter.size()) ;
+    thrust::host_vector<pixel> outGpu = convolve2dGpu(image.getImage(), filter, width, height, filter.size(), handler) ;
     end = timer::now();
 
     t = std::chrono::duration_cast<std::chrono::milliseconds> (end - start);
@@ -273,10 +278,15 @@ int main(int argc, char* argv[]) {
     //////********************************** save data (GPU) *********************************************
     Image outputGpu(outGpu, width, height);
     thrust::host_vector<char> bytesGpu;
-    output.toBytes(bytesGpu);
+    outputGpu.toBytes(bytesGpu, true);
     handler.saveImage(bytesGpu, "./resultGpu.tga", width, height);
 
-    checkCalcError(out2Cpu, outGpu);
+    //////********************************** save data (err) *********************************************
+    thrust::host_vector<pixel> errors = checkCalcError(out2Cpu, outGpu);
+    Image errorImage(errors, width, height);
+    thrust::host_vector<char> bytesError;
+    errorImage.toBytes(bytesError, true);
+    handler.saveImage(bytesError, "./resultError.tga", width, height);
 
     return 0;
 }
