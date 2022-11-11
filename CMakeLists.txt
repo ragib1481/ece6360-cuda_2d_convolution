@@ -8,6 +8,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 set(CMAKE_CUDA_FLAGS_RELEASE "-O3")
+set(CMAKE_CUDA_FLAGS "-fmad=false")
 configure_file(bansberia.tga
         bansberia.tga COPYONLY)
 add_executable(assignment2 main.cu FileHandler.cu FileHandler.cuh Image.cu Image.cuh)
