@@ -20,19 +20,11 @@ thrust::host_vector<pixel> checkCalcError(const thrust::host_vector<pixel> cpuOu
     thrust::host_vector<pixel> errors(cpuOut.size());
     float error = 0.0;
     for (size_t i = 0; i < cpuOut.size(); i++) {
-        errors[i].r = abs(cpuOut[i].r - gpuOut[i].r);
-        errors[i].g = abs(cpuOut[i].g - gpuOut[i].g);
-        errors[i].b = abs(cpuOut[i].b - gpuOut[i].b);
-        if (errors[i].r > 0.0) errors[i].r = 1.0;
-        if (errors[i].g > 0.0) errors[i].g = 1.0;
-        if (errors[i].b > 0.0) errors[i].b = 1.0;
-        //error += (errors[i].r + errors[i].g + errors[i].b);
         error += abs(cpuOut[i].r - gpuOut[i].r);
         error += abs(cpuOut[i].g - gpuOut[i].g);
         error += abs(cpuOut[i].b - gpuOut[i].b);
     }
     cout << "Total absolute error: " << error << endl;
-
     return errors;
 }
 
@@ -121,18 +113,22 @@ void convolveHeightKernel(pixel* out, const pixel* sig, const short width,
     float b = 0.0;
 
     // copy signal to the shared memory
-    //for (int i = threadIdx.y; (i < numElementToCopy) && ((blockDim.y * blockIdx.y + i) < height); i += blockDim.y) {
-    //    signalSharedMem[] = sig[];
-    //}
-    //__syncthreads();
+    for (int i = threadIdx.y; (i < numElementToCopy) && ((blockDim.y * blockIdx.y + i) < height); i += blockDim.y) {
+        signalSharedMem[i * blockDim.x + threadIdx.x] = sig[ix + (blockDim.y * blockIdx.y + i) * width];
+    }
+    __syncthreads();
 
     if ((ix < width) && (iy < newHeight)) {
 
         for (int k = 0; k < filterSize; k++) {
-            idx = ix + (iy + k) * width;
-            r += sig[idx].r * filterConstMem[k];
-            g += sig[idx].g * filterConstMem[k];
-            b += sig[idx].b * filterConstMem[k];
+            //idx = ix + (iy + k) * width;
+            //r += sig[idx].r * filterConstMem[k];
+            //g += sig[idx].g * filterConstMem[k];
+            //b += sig[idx].b * filterConstMem[k];
+            idx = (threadIdx.y + k) * blockDim.x + threadIdx.x;
+            r += signalSharedMem[idx].r * filterConstMem[k];
+            g += signalSharedMem[idx].g * filterConstMem[k];
+            b += signalSharedMem[idx].b * filterConstMem[k];
         }
         idx = ix + iy * width;
         out[idx].r = r;
@@ -165,6 +161,10 @@ void convolveWidthKernel(pixel* out, const pixel* sig, const short width,
 
         // perform convolution
         for (int k = 0; k < filterSize; k++) {
+            //idx = iy * width + ix + k;
+            //r += sig[idx].r * filterConstMem[k];
+            //g += sig[idx].g * filterConstMem[k];
+            //b += sig[idx].b * filterConstMem[k];
             idx = threadIdx.y * numElementToCopy + threadIdx.x + k;
             r += signalSharedMem[idx].r * filterConstMem[k];
             g += signalSharedMem[idx].g * filterConstMem[k];
@@ -223,8 +223,17 @@ thrust::host_vector<pixel> convolve2dGpu(const thrust::host_vector<pixel> sig, c
     width = newWidth;
 
     ////********************************** perform convolution along the height ***************************
-    //sharedBytes = blockDimension.x * (blockDimension.y + filterSize - 1) * sizeof(pixel);
-    sharedBytes = 0;
+    //sharedBytes = filterSize * sizeof(float);
+    blockDimension.y = 8;
+    sharedBytes = blockDimension.x * (blockDimension.y + filterSize - 1) * sizeof(pixel);
+    if (sharedBytes > devProp.sharedMemPerBlock) {
+        cout << "Invalid filter size." << endl;
+        thrust::host_vector<pixel> out((width - filterSize + 1) * (height - filterSize + 1));
+        for (size_t i = 0; i < out.size(); i++){
+            out[i].r = 0.0; out[i].g = 0.0; out[i].b = 0.0;
+        }
+        return out;
+    }
     newHeight = height - filterSize + 1;
     gridDimension.y = (newHeight + blockDimension.y - 1) / blockDimension.y;
 
@@ -303,10 +312,6 @@ int main(int argc, char* argv[]) {
     handler.saveImage(bytesGpu, "./resultGpu.tga", width, height);
 
     //////********************************** save data (err) *********************************************
-    thrust::host_vector<pixel> errors = checkCalcError(out2Cpu, outGpu);
-    Image errorImage(errors, width, height);
-    thrust::host_vector<char> bytesError;
-    errorImage.toBytes(bytesError, true);
-    handler.saveImage(bytesError, "./resultError.tga", width, height);
+    checkCalcError(out2Cpu, outGpu);
     return 0;
 }

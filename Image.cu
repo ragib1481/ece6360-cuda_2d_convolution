@@ -37,7 +37,6 @@ void Image::toBytes(thrust::host_vector<char>& bytes, bool scale) {
             if (image[i].r > max)
                 max = image[i].r;
         }
-        std::cout << "Max : " << max << std::endl;
     }
 
     for (size_t i = 0; i < image.size(); i++){
