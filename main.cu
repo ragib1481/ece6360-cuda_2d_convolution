@@ -219,7 +219,6 @@ thrust::host_vector<pixel> convolve2dGpu(const thrust::host_vector<pixel> sig, c
 
     convolveWidthKernel<<<gridDimension, blockDimension, sharedBytes>>>
                             (out1Ptr, in1Ptr, width, newWidth, height, filterSize);
-    cudaDeviceSynchronize();
     width = newWidth;
 
     ////********************************** perform convolution along the height ***************************
@@ -241,7 +240,6 @@ thrust::host_vector<pixel> convolve2dGpu(const thrust::host_vector<pixel> sig, c
     pixel* out2Ptr = thrust::raw_pointer_cast(out2Gpu.data());
     convolveHeightKernel<<<gridDimension, blockDimension, sharedBytes>>>
                             (out2Ptr, out1Ptr, width, height, newHeight, filterSize);
-    cudaDeviceSynchronize();
     height = newHeight;
 
     thrust::host_vector<pixel> outHost = out2Gpu;
