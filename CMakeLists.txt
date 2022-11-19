@@ -21,7 +21,7 @@ configure_file(M104_ngc4594_sombrero_galaxy.tga
 configure_file(whirlpool.tga
         whirlpool.tga COPYONLY)
 
-add_executable(assignment2 main.cu FileHandler.cu FileHandler.cuh Image.cu Image.cuh)
+add_executable(assignment2 main.cu)
 
 set_target_properties(assignment2 PROPERTIES
         CUDA_SEPARABLE_COMPILATION ON)
